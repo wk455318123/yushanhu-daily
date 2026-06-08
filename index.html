@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>玉珊瑚装修日报</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#faf9f7;color:#333;font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;line-height:1.6}
+.hd{background:#fff;border-bottom:3px solid #d4a574;padding:20px 24px;position:sticky;top:0;z-index:100;box-shadow:0 1px 8px rgba(0,0,0,.06)}
+.hd h1{color:#8b6914;font-size:22px;margin-bottom:4px}
+.hd .sub{color:#999;font-size:13px}
+.date-bar{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.date-btn{background:#f5f0e8;border:1px solid #e8dcc8;color:#8b7355;padding:5px 14px;border-radius:16px;font-size:13px;cursor:pointer;transition:all .2s}
+.date-btn:hover{border-color:#d4a574;color:#d4a574}
+.date-btn.on{background:#d4a57420;border-color:#d4a574;color:#8b6914;font-weight:500}
+.stats{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.stat{background:#f5f0e8;padding:3px 10px;border-radius:12px;font-size:11px;color:#8b7355}
+.body{max-width:800px;margin:0 auto;padding:16px}
+.section{margin-bottom:24px}
+.section-title{font-size:16px;font-weight:600;color:#8b6914;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid #e8dcc8;display:flex;align-items:center;gap:6px}
+.card{background:#fff;border:1px solid #e8dcc8;border-radius:10px;margin-bottom:10px;overflow:hidden;transition:box-shadow .2s}
+.card:hover{box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.card-hd{padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:10px}
+.card-icon{font-size:20px}
+.card-info{flex:1}
+.card-name{font-size:14px;font-weight:500;color:#333}
+.card-meta{font-size:12px;color:#999;margin-top:2px}
+.card-tag{font-size:10px;padding:2px 8px;border-radius:10px;white-space:nowrap}
+.tag-owner{background:#e8f4fd;color:#1a73e8;border:1px solid #c5e0f5}
+.tag-deco{background:#fef3e2;color:#e8a01a;border:1px solid #f5dca8}
+.arrow{color:#ccc;font-size:16px;transition:transform .2s;user-select:none}
+.card.open .arrow{transform:rotate(90deg)}
+.card-body{display:none;padding:0 16px 14px;border-top:1px solid #f0ebe3}
+.card.open .card-body{display:block;padding-top:12px}
+.point{font-size:13px;color:#555;line-height:1.7;padding:4px 0 4px 16px;position:relative}
+.point::before{content:"";position:absolute;left:2px;top:12px;width:6px;height:6px;background:#d4a574;border-radius:50%}
+.empty{text-align:center;padding:60px;color:#ccc;font-size:14px}
+.footer{text-align:center;padding:20px;color:#ccc;font-size:11px;border-top:1px solid #e8dcc8;margin-top:30px}
+</style>
+</head>
+<body>
+<div class="hd">
+<h1>🏠 玉珊瑚装修日报</h1>
+<div class="sub">业主群动态 + 装修团购信息 | 每日自动整理</div>
+<div class="date-bar" id="dates"></div>
+<div class="stats" id="stats"></div>
+</div>
+<div class="body" id="content"><div class="empty">加载中...</div></div>
+<div class="footer">Powered by Claude Code | 数据来源：微信群聊自动汇总</div>
+
+<script>
+var D=[],curDate='';
+
+async function init(){
+  var available=[];
+  try{
+    var r=await fetch('data/manifest.json');
+    if(r.ok) available=await r.json();
+  }catch(e){}
+  if(!available.length){
+    document.getElementById('content').innerHTML='<div class="empty">暂无数据</div>';
+    return;
+  }
+  document.getElementById('dates').innerHTML=available.map(function(ds,i){
+    return '<button class="date-btn'+(i===0?' on':'')+'" data-d="'+ds+'">'+ds.slice(5)+'</button>';
+  }).join('');
+  await loadDate(available[0]);
+}
+
+async function loadDate(ds){
+  curDate=ds;
+  document.querySelectorAll('.date-btn').forEach(function(b){b.classList.toggle('on',b.dataset.d===ds)});
+  document.getElementById('content').innerHTML='<div class="empty">加载中...</div>';
+  try{
+    var r=await fetch('data/'+ds+'.json');
+    D=await r.json();
+    var ownerCount=0,decoCount=0;
+    D.forEach(function(g){if(g.type==='业主群')ownerCount++;else decoCount++;});
+    document.getElementById('stats').innerHTML=
+      '<span class="stat">'+ds+'</span>'+
+      '<span class="stat">业主群 '+ownerCount+'</span>'+
+      '<span class="stat">团购群 '+decoCount+'</span>'+
+      '<span class="stat">共 '+D.length+' 个群</span>';
+    render();
+  }catch(e){
+    document.getElementById('content').innerHTML='<div class="empty">加载失败</div>';
+  }
+}
+
+document.getElementById('dates').addEventListener('click',function(e){
+  if(e.target.classList.contains('date-btn'))loadDate(e.target.dataset.d);
+});
+
+function render(){
+  var owners=D.filter(function(g){return g.type==='业主群'});
+  var decos=D.filter(function(g){return g.type!=='业主群'});
+  var h='';
+  if(owners.length){
+    h+='<div class="section"><div class="section-title">📢 业主群动态</div>';
+    owners.forEach(function(g){h+=renderCard(g)});
+    h+='</div>';
+  }
+  if(decos.length){
+    h+='<div class="section"><div class="section-title">🔨 装修团购信息</div>';
+    decos.forEach(function(g){h+=renderCard(g)});
+    h+='</div>';
+  }
+  if(!h) h='<div class="empty">当天无数据</div>';
+  document.getElementById('content').innerHTML=h;
+}
+
+function renderCard(g){
+  var icon=g.type==='业主群'?'🏘':'🛠';
+  var tagClass=g.type==='业主群'?'tag-owner':'tag-deco';
+  var tagText=g.type==='业主群'?'业主':'团购';
+  var points=g.points.map(function(p){return '<div class="point">'+esc(p)+'</div>'}).join('');
+  return '<div class="card"><div class="card-hd">'+
+    '<span class="card-icon">'+icon+'</span>'+
+    '<div class="card-info"><div class="card-name">'+esc(g.group)+'</div>'+
+    '<div class="card-meta">'+g.count+' 条消息 · '+g.points.length+' 个要点</div></div>'+
+    '<span class="card-tag '+tagClass+'">'+tagText+'</span>'+
+    '<span class="arrow">›</span></div>'+
+    '<div class="card-body">'+points+'</div></div>';
+}
+
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+document.getElementById('content').addEventListener('click',function(e){
+  var card=e.target.closest('.card');
+  if(card&&!e.target.closest('a'))card.classList.toggle('open');
+});
+
+init();
+</script>
+</body>
+</html>
